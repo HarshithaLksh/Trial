@@ -1,45 +1,33 @@
 pipeline {
   agent any
 
-  environment {
-    APP_NAME = "trial-app"
-  }
-
   stages {
     stage('Checkout') {
-      steps {
-        checkout scm
-      }
+      steps { checkout scm }
     }
 
     stage('Prepare') {
       steps {
-        // create a virtual env and install dependencies if any (optional)
         sh '''
           echo "Workspace: $WORKSPACE"
           mkdir -p build
-          echo "print('Hello from simple pipeline')" > app.py
+          echo "Hello from simple pipeline" > build/hello.txt
         '''
       }
     }
 
-    stage('Run Script') {
+    stage('Print') {
       steps {
-        // run the Python script (assumes python is available on the agent)
-        sh '''
-          python --version || true
-          python app.py
-        '''
+        sh 'echo "Contents of build/hello.txt:" && cat build/hello.txt'
       }
     }
 
-    stage('Unit Test') {
+    stage('Unit Test (dummy)') {
       steps {
-        // a tiny "test" (creates a file then validates it)
         sh '''
-          echo "Running a simple test..."
+          echo "Running a dummy test..."
           echo "ok" > build/test-result.txt
-          test -f build/test-result.txt && echo "Test file exists"
+          test -f build/test-result.txt && echo "Test passed"
         '''
       }
     }
@@ -52,15 +40,9 @@ pipeline {
   }
 
   post {
-    success {
-      echo "Pipeline succeeded."
-    }
-    failure {
-      echo "Pipeline failed — check console output."
-    }
-    always {
-      cleanWs()
-    }
+    success { echo "Pipeline succeeded." }
+    failure { echo "Pipeline failed — check console output." }
+    always { cleanWs() }
   }
 }
 
