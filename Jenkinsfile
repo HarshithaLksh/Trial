@@ -1,9 +1,9 @@
 pipeline {
   agent any
   environment {
-    NEXUS_BASE = "http://hnexus.vyturr.one:8081"   // change to your Nexus base URL if needed
-    NEXUS_REPO = "raw-hosted"                     // raw hosted repo name
-    NEXUS_UPLOAD_PATH = "ci-artifacts"            // base path inside repo
+    NEXUS_BASE = "http://hnexus.vyturr.one:8081"   // adjust if needed
+    NEXUS_REPO  = "raw-hosted"
+    REMOTE_BASE = "ci-artifacts"
   }
   stages {
     stage('Checkout') {
@@ -16,6 +16,7 @@ pipeline {
           mkdir -p build
           echo "Hello from CI build!" > build/hello.txt
           echo "ok" > build/test-result.txt
+          ls -l build
         '''
       }
     }
@@ -28,40 +29,29 @@ pipeline {
 
     stage('Upload to Nexus (raw)') {
       steps {
-        withCredentials([usernamePassword(credentialsId: 'nexus-http-creds', usernameVariable: 'N_USER', passwordVariable: 'N_PASS')]) {
-          script {
-            // compute remote folder per build number and timestamp
-            def remoteFolder = "${env.NEXUS_UPLOAD_PATH}/${env.BUILD_NUMBER}"
-            echo "Uploading to Nexus path: ${remoteFolder}"
-
-            // upload each file in build/
-            sh """
-              set -e
-              for f in build/*; do
-                fname=\$(basename \"\$f\")
-                url="${NEXUS_BASE}/repository/${NEXUS_REPO}/${remoteFolder}/\$fname"
-                echo "Uploading \$f => \$url"
-                # use curl with basic auth; --fail to catch HTTP errors; --show-error for diagnostics
-                curl -u "$N_USER:$N_PASS" --fail --show-error --upload-file "\$f" "\$url"
-                echo "Uploaded: \$url"
-              done
-            """
-            
-            // expose the base URL as an environment variable for later use
-            env.NEXUS_ARTIFACT_URL = "${NEXUS_BASE}/repository/${NEXUS_REPO}/${remoteFolder}/"
-            echo "Artifacts uploaded to: ${env.NEXUS_ARTIFACT_URL}"
-          }
+        withCredentials([usernamePassword(credentialsId: 'nexus-http-creds', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PW')]) {
+          sh '''
+            set -euo pipefail
+            REMOTE_FOLDER="${REMOTE_BASE}/${BUILD_NUMBER}"
+            for f in build/*; do
+              fname=$(basename "$f")
+              url="${NEXUS_BASE}/repository/${NEXUS_REPO}/${REMOTE_FOLDER}/${fname}"
+              echo "Uploading $f => $url"
+              curl -u "$NEXUS_USER:$NEXUS_PW" --fail --show-error --upload-file "$f" "$url"
+              echo "Uploaded: $url"
+            done
+            echo "Uploaded artifacts to: ${NEXUS_BASE}/repository/${NEXUS_REPO}/${REMOTE_FOLDER}/"
+          '''
         }
       }
     }
   }
-
   post {
     success {
-      echo "Done. Nexus artifact folder: ${env.NEXUS_ARTIFACT_URL}"
+      echo "Pipeline complete. Artifacts uploaded."
     }
     failure {
-      echo "Upload failed — check console output"
+      echo "Pipeline failed; check console output."
     }
   }
 }
