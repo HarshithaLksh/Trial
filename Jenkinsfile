@@ -1,10 +1,8 @@
 pipeline {
   agent any
+
   environment {
-    // change REGISTRY if your Nexus registry host/port differs
-    REGISTRY = "hnexus.vyturr.one:5000"
-    IMAGE    = "demo/trial-app"
-    TAG      = "${env.BUILD_NUMBER ?: 'local'}"
+    APP_NAME = "trial-app"
   }
 
   stages {
@@ -14,36 +12,55 @@ pipeline {
       }
     }
 
-    stage('Build') {
+    stage('Prepare') {
       steps {
-        // build image
-        sh 'docker build -t ${REGISTRY}/${IMAGE}:${TAG} .'
-        sh 'docker tag ${REGISTRY}/${IMAGE}:${TAG} ${REGISTRY}/${IMAGE}:latest'
+        // create a virtual env and install dependencies if any (optional)
+        sh '''
+          echo "Workspace: $WORKSPACE"
+          mkdir -p build
+          echo "print('Hello from simple pipeline')" > app.py
+        '''
       }
     }
 
-    stage('Login to Nexus') {
+    stage('Run Script') {
       steps {
-        // Jenkins credential with ID nexus-docker-creds must exist
-        withCredentials([usernamePassword(credentialsId: 'nexus-docker-creds', usernameVariable: 'N_USER', passwordVariable: 'N_PASS')]) {
-          sh 'echo "$N_PASS" | docker login ${REGISTRY} -u "$N_USER" --password-stdin'
-        }
+        // run the Python script (assumes python is available on the agent)
+        sh '''
+          python --version || true
+          python app.py
+        '''
       }
     }
 
-    stage('Push') {
+    stage('Unit Test') {
       steps {
-        sh 'docker push ${REGISTRY}/${IMAGE}:${TAG}'
-        sh 'docker push ${REGISTRY}/${IMAGE}:latest'
+        // a tiny "test" (creates a file then validates it)
+        sh '''
+          echo "Running a simple test..."
+          echo "ok" > build/test-result.txt
+          test -f build/test-result.txt && echo "Test file exists"
+        '''
+      }
+    }
+
+    stage('Archive') {
+      steps {
+        archiveArtifacts artifacts: 'build/**', fingerprint: true
       }
     }
   }
 
   post {
+    success {
+      echo "Pipeline succeeded."
+    }
+    failure {
+      echo "Pipeline failed — check console output."
+    }
     always {
-      sh 'docker logout ${REGISTRY} || true'
+      cleanWs()
     }
   }
 }
-
 
