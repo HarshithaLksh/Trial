@@ -11,7 +11,7 @@ pipeline {
         sh '''
           echo "Workspace: $WORKSPACE"
           mkdir -p build
-          echo "Hello from simple pipeline" > build/hello.txt
+          echo "Hello hi from simple pipeline" > build/hello.txt
         '''
       }
     }
